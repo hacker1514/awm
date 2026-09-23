@@ -1,0 +1,3 @@
+-keep class com.awm.aiwithme.** { *; }
+-keepclassmembers class com.awm.aiwithme.** { *; }
+-keep interface com.awm.aiwithme.** { *; }
