@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:markdown/markdown.dart' as md;
+import 'package:flutter_highlighter/flutter_highlighter.dart';
+import 'package:flutter_highlighter/themes/atom-one-dark.dart';
 import '../models/chat_message.dart';
 import '../services/llama_service.dart';
 import '../services/model_manager.dart';
@@ -481,7 +485,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.82,
+          maxWidth: MediaQuery.of(context).size.width * 0.86,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -511,15 +515,25 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SelectableText(
-              msg.content,
-              style: TextStyle(
-                color: isUser ? Colors.white : theme.textPrimary,
-                fontSize: fontSize,
-                height: 1.45,
+            if (isUser)
+              SelectableText(
+                msg.content,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: fontSize,
+                  height: 1.45,
+                ),
+              )
+            else
+              MarkdownBody(
+                data: msg.content,
+                selectable: true,
+                styleSheet: _buildMarkdownStyleSheet(theme, fontSize, isUser),
+                builders: {
+                  'pre': CustomCodeBlockBuilder(theme, context),
+                },
               ),
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.end,
@@ -529,10 +543,23 @@ class _ChatScreenState extends State<ChatScreen> {
                   onTap: () => _copyToClipboard(msg.content),
                   child: Padding(
                     padding: const EdgeInsets.all(2.0),
-                    child: Icon(
-                      Icons.copy_rounded,
-                      size: 14,
-                      color: isUser ? Colors.white70 : theme.textSecondary,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.copy_rounded,
+                          size: 13,
+                          color: isUser ? Colors.white70 : theme.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Copy",
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isUser ? Colors.white70 : theme.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -550,9 +577,9 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.82,
+          maxWidth: MediaQuery.of(context).size.width * 0.86,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: theme.aiBubbleColor,
           border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
@@ -566,25 +593,273 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _currentStreamResponse.isEmpty ? "AWM is thinking..." : _currentStreamResponse,
-              style: TextStyle(
-                color: theme.textPrimary,
-                fontSize: fontSize,
-                height: 1.45,
+            if (_currentStreamResponse.isEmpty)
+              Text(
+                "AWM is thinking...",
+                style: TextStyle(
+                  color: theme.textSecondary,
+                  fontSize: fontSize,
+                  fontStyle: FontStyle.italic,
+                ),
+              )
+            else
+              MarkdownBody(
+                data: _currentStreamResponse,
+                selectable: true,
+                styleSheet: _buildMarkdownStyleSheet(theme, fontSize, false),
+                builders: {
+                  'pre': CustomCodeBlockBuilder(theme, context),
+                },
               ),
-            ),
             const SizedBox(height: 8),
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: theme.primaryColor,
-              ),
+            Row(
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  "Generating...",
+                  style: TextStyle(
+                    color: theme.primaryColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  MarkdownStyleSheet _buildMarkdownStyleSheet(AppThemeData theme, double fontSize, bool isUser) {
+    final baseTextColor = isUser ? Colors.white : theme.textPrimary;
+    return MarkdownStyleSheet(
+      p: TextStyle(
+        color: baseTextColor,
+        fontSize: fontSize,
+        height: 1.5,
+      ),
+      h1: TextStyle(
+        color: isUser ? Colors.white : theme.primaryColor,
+        fontSize: fontSize + 5,
+        fontWeight: FontWeight.bold,
+        height: 1.4,
+      ),
+      h2: TextStyle(
+        color: isUser ? Colors.white : theme.accentColor,
+        fontSize: fontSize + 3,
+        fontWeight: FontWeight.bold,
+        height: 1.35,
+      ),
+      h3: TextStyle(
+        color: isUser ? Colors.white : theme.primaryColor,
+        fontSize: fontSize + 2,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      h4: TextStyle(
+        color: isUser ? Colors.white : theme.accentColor,
+        fontSize: fontSize + 1,
+        fontWeight: FontWeight.w600,
+      ),
+      strong: TextStyle(
+        color: isUser ? Colors.white : theme.primaryColor,
+        fontWeight: FontWeight.bold,
+      ),
+      em: TextStyle(
+        color: baseTextColor.withValues(alpha: 0.9),
+        fontStyle: FontStyle.italic,
+      ),
+      code: TextStyle(
+        color: isUser ? Colors.white : theme.accentColor,
+        backgroundColor: isUser
+            ? Colors.white.withValues(alpha: 0.2)
+            : theme.primaryColor.withValues(alpha: 0.15),
+        fontFamily: 'monospace',
+        fontSize: fontSize - 1,
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      blockquote: TextStyle(
+        color: theme.textSecondary,
+        fontStyle: FontStyle.italic,
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(4),
+        border: Border(
+          left: BorderSide(color: theme.primaryColor, width: 3),
+        ),
+      ),
+      blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      listBullet: TextStyle(
+        color: isUser ? Colors.white : theme.primaryColor,
+        fontWeight: FontWeight.bold,
+      ),
+      a: TextStyle(
+        color: theme.primaryColor,
+        decoration: TextDecoration.underline,
+      ),
+    );
+  }
+}
+
+class CustomCodeBlockBuilder extends MarkdownElementBuilder {
+  final AppThemeData theme;
+  final BuildContext context;
+  CustomCodeBlockBuilder(this.theme, this.context);
+
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    var language = '';
+    if (element.attributes['class'] != null) {
+      String lg = element.attributes['class'] as String;
+      language = lg.replaceFirst('language-', '');
+    }
+    final String codeContent = element.textContent.trimRight();
+
+    final customSyntaxTheme = Map<String, TextStyle>.from(atomOneDarkTheme);
+    customSyntaxTheme['root'] = const TextStyle(
+      backgroundColor: Colors.transparent,
+      color: Color(0xFFABB2BF),
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF090D16),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.primaryColor.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(11),
+                topRight: Radius.circular(11),
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: theme.primaryColor.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(Icons.terminal_rounded, size: 14, color: theme.primaryColor),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      language.isEmpty ? "code" : language.toUpperCase(),
+                      style: TextStyle(
+                        color: theme.primaryColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: codeContent));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text("Code copied to clipboard!"),
+                        backgroundColor: theme.cardColor,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.primaryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.copy_rounded, size: 12, color: theme.primaryColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Copy",
+                          style: TextStyle(
+                            color: theme.primaryColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // High-precision Colorful Code Renderer
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(11),
+              bottomRight: Radius.circular(11),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: HighlightView(
+                codeContent,
+                language: language.isEmpty ? 'plaintext' : language.toLowerCase(),
+                theme: customSyntaxTheme,
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

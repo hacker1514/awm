@@ -178,6 +178,13 @@ Java_com_awm_aiwithme_LlamaBridge_nativeGenerate(
             return;
         }
 
+        // Clamp prompt tokens if needed to max 640 tokens (leaving context space for 384 generated tokens)
+        int max_prompt_tokens = 640;
+        if ((int)prompt_tokens.size() > max_prompt_tokens) {
+            int skip = (int)prompt_tokens.size() - max_prompt_tokens;
+            prompt_tokens.erase(prompt_tokens.begin(), prompt_tokens.begin() + skip);
+        }
+
         // Reset sampler and context KV memory state before new turn
         llama_sampler_reset(g_smpl);
         llama_memory_t mem = llama_get_memory(g_ctx);
@@ -185,15 +192,19 @@ Java_com_awm_aiwithme_LlamaBridge_nativeGenerate(
             llama_memory_seq_rm(mem, -1, -1, -1);
         }
 
-        // Evaluate prompt batch using official llama_batch_get_one
-        llama_batch batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());
-        if (llama_decode(g_ctx, batch) != 0) {
-            LOGE("llama_decode failed during prompt processing");
-            if (callback && onCompleteMethod) {
-                env->CallVoidMethod(callback, onCompleteMethod);
-                if (env->ExceptionCheck()) env->ExceptionClear();
+        // Evaluate prompt batch in chunks of 256 to avoid exceeding n_batch
+        int batch_size = 256;
+        for (size_t i = 0; i < prompt_tokens.size(); i += batch_size) {
+            int n_eval = std::min(batch_size, (int)(prompt_tokens.size() - i));
+            llama_batch batch = llama_batch_get_one(prompt_tokens.data() + i, n_eval);
+            if (llama_decode(g_ctx, batch) != 0) {
+                LOGE("llama_decode failed during prompt processing");
+                if (callback && onCompleteMethod) {
+                    env->CallVoidMethod(callback, onCompleteMethod);
+                    if (env->ExceptionCheck()) env->ExceptionClear();
+                }
+                return;
             }
-            return;
         }
 
         int n_predict = 384;
@@ -221,7 +232,7 @@ Java_com_awm_aiwithme_LlamaBridge_nativeGenerate(
             }
 
             // Prepare next single token batch
-            batch = llama_batch_get_one(&new_token_id, 1);
+            llama_batch batch = llama_batch_get_one(&new_token_id, 1);
             if (llama_decode(g_ctx, batch) != 0) {
                 LOGE("llama_decode failed during single token generation");
                 break;

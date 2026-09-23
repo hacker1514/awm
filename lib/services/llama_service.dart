@@ -52,36 +52,53 @@ class LlamaService {
     }
   }
 
-  String formatPrompt(String currentInput, List<ChatMessage> history, {String persona = "Standard AWM"}) {
+  String formatPrompt(
+    String currentInput,
+    List<ChatMessage> history, {
+    String persona = "Standard AWM",
+    bool singleQuestionMode = true,
+  }) {
     final sb = StringBuffer();
     final systemPrompt = getSystemPromptForPersona(persona);
 
     // Phi-3 / SmolLM Chat Template (<|im_start|>system / user / assistant <|im_end|>)
     sb.write("<|im_start|>system\n$systemPrompt<|im_end|>\n");
 
-    // Include recent history (max 6 messages) to keep memory footprint light for mobile devices
-    final recentHistory = history.length > 6
-        ? history.sublist(history.length - 6)
-        : history;
+    // Only include recent history if singleQuestionMode is false
+    if (!singleQuestionMode && history.isNotEmpty) {
+      final recentHistory = history.length > 2
+          ? history.sublist(history.length - 2)
+          : history;
 
-    for (final msg in recentHistory) {
-      if (msg.role == MessageRole.user) {
-        sb.write("<|im_start|>user\n${msg.content}<|im_end|>\n");
-      } else if (msg.role == MessageRole.assistant) {
-        sb.write("<|im_start|>assistant\n${msg.content}<|im_end|>\n");
+      for (final msg in recentHistory) {
+        if (msg.role == MessageRole.user) {
+          sb.write("<|im_start|>user\n${msg.content}<|im_end|>\n");
+        } else if (msg.role == MessageRole.assistant) {
+          sb.write("<|im_start|>assistant\n${msg.content}<|im_end|>\n");
+        }
       }
     }
 
-    // Current prompt
+    // Current prompt (Single Question & Answer mode)
     sb.write("<|im_start|>user\n$currentInput<|im_end|>\n");
     sb.write("<|im_start|>assistant\n");
 
     return sb.toString();
   }
 
-  Stream<String> generateResponse(String currentInput, List<ChatMessage> history, {String persona = "Standard AWM"}) {
+  Stream<String> generateResponse(
+    String currentInput,
+    List<ChatMessage> history, {
+    String persona = "Standard AWM",
+    bool singleQuestionMode = true,
+  }) {
     final controller = StreamController<String>();
-    final formattedPrompt = formatPrompt(currentInput, history, persona: persona);
+    final formattedPrompt = formatPrompt(
+      currentInput,
+      history,
+      persona: persona,
+      singleQuestionMode: singleQuestionMode,
+    );
 
     _isGenerating = true;
 
